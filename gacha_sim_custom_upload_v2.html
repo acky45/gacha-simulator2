@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ガチャ カスタムアソート シミュレータ v2（設定保存・10連・CSV対応）</title>
+  <style>
+    :root {
+      --primary: #2c3e50; --accent: #e74c3c;
+      --bg: #f8f9fa; --card-bg: #fff; --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0;
+        font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; }
+    html, body { height: 100%; }
+    body { background: var(--bg); color: #333; line-height: 1.6;
+           display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ─── ヘッダー ─── */
+    header { background: var(--primary); color: #fff; padding: 6px 24px; text-align: center; flex-shrink: 0; }
+    header h1 { font-size: 1rem; }
+
+    /* ─── レイアウト（左右パネルは独立スクロール） ─── */
+    .main-layout { display: flex; flex: 1; min-height: 0; }
+    .panel-left {
+      width: 480px; flex-shrink: 0;
+      padding: 12px; border-right: 2px solid var(--border); overflow-y: auto;
+    }
+    .panel-right {
+      flex: 1; min-width: 0; padding: 12px;
+      display: flex; flex-direction: column; align-items: center;
+      overflow-y: auto;
+    }
+
+    /* ─── カード ─── */
+    .card {
+      background: var(--card-bg); border-radius: 8px; padding: 13px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .card-title {
+      font-size: 0.95rem; font-weight: bold; margin-bottom: 10px;
+      padding-bottom: 6px; border-bottom: 2px solid var(--border); color: var(--primary);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .card-title .clear-link {
+      font-size: 0.72rem; font-weight: normal; color: #888;
+      cursor: pointer; text-decoration: underline;
+    }
+    .card-title .clear-link:hover { color: var(--accent); }
+    .section-sep {
+      border: none; border-top: 1px dashed var(--border); margin: 12px 0;
+    }
+    .section-label {
+      font-size: 0.82rem; font-weight: bold; color: #666; margin-bottom: 7px;
+    }
+    .img-hint {
+      font-size: 0.72rem; color: #999; margin-bottom: 8px;
+    }
+
+    /* ─── 種類数入力 ─── */
+    .cnt-input-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .cnt-input {
+      width: 90px; padding: 6px 8px;
+      border: 2px solid var(--border); border-radius: 4px;
+      font-size: 0.95rem; font-weight: bold; text-align: right;
+    }
+    .cnt-input:focus { outline: none; border-color: var(--primary); }
+    .cnt-range-hint { font-size: 0.78rem; color: #888; }
+
+    /* ─── タイプ行 ─── */
+    .col-header {
+      display: grid;
+      grid-template-columns: 22px 1fr 62px 62px 50px;
+      gap: 5px; padding: 0 8px 4px;
+      font-size: 0.71rem; color: #999; font-weight: bold;
+    }
+    .col-header span { text-align: right; }
+    .col-header span:nth-child(2) { text-align: left; }
+
+    .type-row {
+      display: grid;
+      grid-template-columns: 22px 1fr 62px 62px 50px;
+      align-items: center; gap: 5px;
+      padding: 6px 8px; margin-bottom: 5px;
+      border-radius: 5px; background: #fafafa; border: 1px solid var(--border);
+    }
+    .type-row.hidden { display: none; }
+
+    /* クリックで画像を割り当てるアイコン（背景色はJSがタイプ色を設定） */
+    .dot-upload {
+      width: 22px; height: 22px; border-radius: 50%; display: block;
+      cursor: pointer; background-size: cover; background-position: center;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
+      position: relative;
+    }
+    .dot-upload::after {
+      content: '+'; position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 11px; font-weight: bold; color: rgba(255,255,255,0.85);
+    }
+    .dot-upload.has-img::after { content: ''; }
+    .img-file-input { display: none; }
+
+    /* 表紙画像（初期表示用）アップロード */
+    .cover-upload {
+      display: block; width: 80%; aspect-ratio: 1; border-radius: 8px;
+      cursor: pointer; background-size: cover; background-position: center;
+      background-color: #eee; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+      position: relative; margin: 0 auto;
+    }
+    .cover-upload::after {
+      content: '+'; position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 34px; font-weight: bold; color: #aaa;
+    }
+    .cover-upload.has-img::after { content: ''; }
+
+    .name-inp {
+      padding: 4px 5px; border: 1px solid var(--border);
+      border-radius: 3px; font-size: 0.84rem; width: 100%;
+    }
+    .num-inp {
+      padding: 4px 5px; border: 1px solid var(--border);
+      border-radius: 3px; font-size: 0.84rem; width: 100%; text-align: right;
+    }
+    .remain-val {
+      font-size: 0.84rem; font-weight: bold; text-align: right; padding-right: 3px;
+    }
+
+    /* ─── 合計バー ─── */
+    .totals-row {
+      display: flex; justify-content: flex-end; gap: 14px;
+      font-size: 0.82rem; font-weight: bold; margin-top: 6px; color: #555;
+    }
+    .totals-row .t-remain { color: var(--primary); }
+
+    /* ─── ボタン・エラー ─── */
+    .btn-start {
+      display: block; width: 100%; padding: 10px;
+      background: #27ae60; color: #fff; border: none;
+      border-radius: 4px; font-size: 0.95rem; font-weight: bold;
+      cursor: pointer; margin-top: 10px; transition: background .2s;
+    }
+    .btn-start:hover { background: #229954; }
+    .error-msg {
+      background: #fde8e8; color: var(--accent); padding: 9px;
+      border-radius: 4px; margin-top: 9px; font-size: 0.82rem;
+      display: none; border-left: 4px solid var(--accent);
+    }
+    .save-note {
+      font-size: 0.7rem; color: #aaa; text-align: center; margin-top: 8px;
+    }
+
+    /* ─── 右パネル ─── */
+    #sim-placeholder {
+      color: #aaa; font-size: 0.92rem; text-align: center;
+      margin-top: 80px; max-width: 320px; line-height: 1.8;
+    }
+    #sim-area {
+      display: none; flex-direction: column; align-items: center; width: 100%;
+    }
+    #sim-header {
+      font-size: 0.88rem; font-weight: bold; color: var(--primary);
+      margin-bottom: 10px; text-align: center; line-height: 1.5;
+    }
+
+    /* 画像＋バーの横並び2カラム */
+    .sim-row {
+      display: flex; gap: 20px; align-items: flex-start;
+      width: 100%; max-width: 780px; justify-content: center;
+    }
+    .sim-col-image {
+      display: flex; flex-direction: column; align-items: center; flex-shrink: 0;
+    }
+    .sim-col-bars { flex: 1; min-width: 0; padding-top: 4px; }
+
+    #display-canvas {
+      display: block; width: 280px; height: 280px;
+      border: 2px solid var(--border); background: #fff; border-radius: 4px;
+    }
+    #result-label {
+      text-align: center; font-size: 0.86rem;
+      margin: 7px 0; min-height: 1.3em; color: #555;
+    }
+
+    /* 残り数バー */
+    .sim-bars { width: 100%; }
+    .sim-bar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; font-size: 0.82rem; }
+    .sim-bar-row.hidden { display: none; }
+    .sim-bar-label {
+      width: 100px; flex-shrink: 0; font-weight: bold;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sim-bar-wrap  { flex: 1; background: #e2e8f0; border-radius: 6px; height: 13px; overflow: hidden; }
+    .sim-bar-fill  { height: 100%; border-radius: 6px; transition: width .3s; }
+    .sim-bar-count { width: 128px; text-align: right; flex-shrink: 0; color: #555; font-size: 0.78rem; }
+
+    /* ガチャボタンと操作ボタン */
+    #gacha-btn {
+      display: block; margin: 4px auto 6px;
+      cursor: pointer; border: none; background: none; padding: 0;
+    }
+    #gacha-btn img { width: 88px; height: 88px; display: block; }
+    #gacha-btn.sold-out { opacity: 0.35; cursor: not-allowed; }
+    @keyframes spin-back { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+    #gacha-btn.spinning { animation: spin-back 0.73s ease-in-out; }
+
+    .action-btns { display: flex; gap: 6px; justify-content: center; margin-bottom: 10px; }
+    .mini-btn {
+      padding: 5px 12px; font-size: 0.78rem; font-weight: bold;
+      border: 1.5px solid var(--primary); border-radius: 4px;
+      background: #fff; color: var(--primary); cursor: pointer; transition: all .15s;
+    }
+    .mini-btn:hover { background: var(--primary); color: #fff; }
+    .mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .mini-btn:disabled:hover { background: #fff; color: var(--primary); }
+
+    #sold-out-banner {
+      display: none; text-align: center; font-size: 1rem; font-weight: bold;
+      color: var(--accent); padding: 7px 16px; margin-bottom: 8px;
+      background: #fde8e8; border-radius: 6px; width: 100%; max-width: 560px;
+    }
+
+    /* 履歴グリッド */
+    #history-section { width: 100%; max-width: 830px; margin-top: 4px; }
+    #history-section h3 {
+      font-size: 0.86rem; font-weight: bold; color: #555; margin-bottom: 5px;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    #history-grid { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; }
+
+    .history-item { position: relative; aspect-ratio: 1; cursor: pointer; }
+    .history-item img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block; border-radius: 2px; border: 1px solid #ccc;
+    }
+
+    /* 履歴アイコンの拡大表示モーダル */
+    .img-modal {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.75); align-items: center; justify-content: center;
+      cursor: zoom-out;
+    }
+    .img-modal.show { display: flex; }
+    .img-modal img {
+      max-width: 85vw; max-height: 85vh; border-radius: 6px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5); background: #fff;
+    }
+    .h-fallback {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: bold; color: #fff; border-radius: 2px;
+    }
+    .h-num {
+      position: absolute; top: 0; left: 0;
+      background: rgba(0,0,0,0.55); color: #fff;
+      font-size: 9px; font-weight: bold; padding: 0 2px; border-radius: 2px;
+    }
+    .h-badge {
+      position: absolute; bottom: 0; right: 0;
+      font-size: 8px; font-weight: bold; padding: 0 2px;
+      border-radius: 2px; color: #fff;
+      max-width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>ガチャ カスタムアソート シミュレータ v2（設定保存・10連・CSV対応）</h1>
+</header>
+
+<div class="main-layout">
+
+  <!-- ══════════════════════ 左パネル ══════════════════════ -->
+  <div class="panel-left">
+    <div class="card">
+      <div class="card-title">
+        <span>アソート設定</span>
+        <span class="clear-link" onclick="clearAllImages()">割り当てた画像をすべて解除</span>
+      </div>
+      <div class="img-hint">● アイコンをクリックすると、そのタイプに画像を割り当てられます（自動で縮小してこのブラウザに保存されます）</div>
+
+      <!-- 表紙画像（ガチャ前の初期表示） -->
+      <div style="margin-bottom:10px;">
+        <div class="section-label">表紙画像（「ガチャボタンを押してください」の背景）</div>
+        <label class="cover-upload" id="cover-thumb" for="img-cover" title="クリックで表紙画像を割り当て"></label>
+        <input type="file" id="img-cover" accept="image/*" class="img-file-input" onchange="onCoverImageSelect(this)">
+        <div style="text-align:center; margin-top:6px;">
+          <span class="clear-link" onclick="clearCoverImage()">解除</span>
+        </div>
+      </div>
+
+      <!-- 種類数入力（1〜24種） -->
+      <div style="margin-bottom:10px;">
+        <div class="section-label">アソート種類数</div>
+        <div class="cnt-input-wrap">
+          <input class="cnt-input" id="type-count" type="number" min="1" max="24" value="3" oninput="onTypeCountChange()">
+          <span class="cnt-range-hint">種（1〜24 の数値を入力）</span>
+        </div>
+      </div>
+
+      <!-- 列ヘッダー -->
+      <div class="col-header">
+        <span></span>
+        <span style="text-align:left">名前</span>
+        <span>初期数</span>
+        <span>排出済</span>
+        <span>残り</span>
+      </div>
+
+      <!-- タイプ行（a〜x、JSが動的生成） -->
+      <div id="type-rows"></div>
+
+      <!-- 合計 -->
+      <div class="totals-row">
+        <span>初期合計: <strong id="total-init">0</strong>個</span>
+        <span>排出済: <strong id="total-drawn">0</strong>個</span>
+        <span class="t-remain">残り: <strong id="total-rem">0</strong>個</span>
+      </div>
+
+      <hr class="section-sep">
+
+      <button class="btn-start" onclick="startSimulation()">
+        このアソートでシミュレート開始 ▶
+      </button>
+      <div class="error-msg" id="error-box"></div>
+      <div class="save-note">※ 設定（種類数・名前・個数）と画像は自動保存され、次回開いたとき復元されます</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ 右パネル ══════════════════════ -->
+  <div class="panel-right">
+
+    <p id="sim-placeholder">
+      ← 左でアソートを設定して<br>「シミュレート開始 ▶」を押してください
+    </p>
+
+    <div id="sim-area">
+
+      <div id="sim-header"></div>
+
+      <!-- 画像とバーリストの横並び -->
+      <div class="sim-row">
+        <div class="sim-col-image">
+          <canvas id="display-canvas" width="280" height="280"></canvas>
+          <div id="result-label"></div>
+
+          <!-- ガチャボタン -->
+          <button id="gacha-btn">
+            <img src="1000196889_2.png" alt="ガチャ"
+                 onerror="this.style.display='none'; this.parentNode.textContent='🎰';">
+          </button>
+
+          <!-- 10連・アンドゥ -->
+          <div class="action-btns">
+            <button class="mini-btn" id="multi-btn" onclick="drawMulti(10)">10連 ▶</button>
+            <button class="mini-btn" id="undo-btn" onclick="undoDraw()" disabled>↩ 1回戻す</button>
+          </div>
+        </div>
+
+        <div class="sim-col-bars">
+          <!-- 残り数バー（JSが動的生成、非アクティブは hidden） -->
+          <div class="sim-bars" id="sim-bars"></div>
+        </div>
+      </div>
+
+      <!-- 履歴グリッド -->
+      <div id="history-section">
+        <h3>引いた履歴 <span id="history-count" style="font-weight:normal; color:#888;"></span>
+          <button class="mini-btn" id="csv-btn" onclick="downloadCSV()" disabled>CSV保存</button>
+        </h3>
+        <div id="history-grid"></div>
+      </div>
+
+      <div id="sold-out-banner">【全商品終了】</div>
+
+    </div><!-- /sim-area -->
+  </div><!-- /panel-right -->
+</div>
+
+<!-- 履歴アイコン拡大表示モーダル -->
+<div id="img-modal" class="img-modal" onclick="closeImageModal()">
+  <img id="img-modal-img" alt="拡大画像">
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  定数
+// ══════════════════════════════════════════
+const MAX_TYPES = 24;
+// タイプ識別子は a〜x の24文字（旧版の a〜g と互換、保存済み画像もそのまま使える）
+const ALL_TYPES = Array.from({ length: MAX_TYPES }, (_, i) => String.fromCharCode(97 + i));
+
+// 24色パレット（先頭7色は旧版の A〜G と同じ）
+const PALETTE = [
+  '#b37d4e','#6b8e23','#c4a97a','#3498db','#9b59b6','#e67e22','#1abc9c',
+  '#e74c3c','#2ecc71','#f1c40f','#34495e','#d35400','#7f8c8d','#c0392b',
+  '#16a085','#8e44ad','#2980b9','#f39c12','#27ae60','#e84393','#6c5ce7',
+  '#00b894','#fd79a8','#636e72'
+];
+const TYPE_COLORS = Object.fromEntries(ALL_TYPES.map((t, i) => [t, PALETTE[i]]));
+
+// 初期数のデフォルト（8種目以降は5）
+const DEFAULT_RATIOS = [7,7,6,5,4,3,2];
+
+// localStorage のキー（画像は旧版と共通キーなので引き継がれる）
+const CUSTOM_IMG_PREFIX = 'gachaCustomImg_';
+const COVER_IMG_KEY     = 'gachaCoverImg';
+const SETTINGS_KEY      = 'gachaAssortSettings';
+
+// アップロード画像の自動縮小サイズ（長辺px）
+const IMG_MAX_SIDE   = 360;
+const COVER_MAX_SIDE = 600;
+
+// ══════════════════════════════════════════
+//  状態
+// ══════════════════════════════════════════
+let activeTypes   = ['a','b','c'];
+let typeNames     = Object.fromEntries(ALL_TYPES.map(t => [t, t.toUpperCase()]));
+let customImages  = {}; // type -> dataURL（ユーザーがアップロードした画像）
+let coverImage    = null; // 初期表示（表紙）用のデータURL
+
+let simPool      = [];
+let simInitial   = {};
+let simRemaining = {};
+let simCount     = 0;
+let drawnHistory = []; // 引いた順の記録 [{type, count}]（アンドゥ・CSVに使用）
+
+// ══════════════════════════════════════════
+//  DOM 参照
+// ══════════════════════════════════════════
+const canvas         = document.getElementById('display-canvas');
+const ctx            = canvas.getContext('2d');
+const resultLabel    = document.getElementById('result-label');
+const gachaBtn       = document.getElementById('gacha-btn');
+const historyGrid    = document.getElementById('history-grid');
+const simArea        = document.getElementById('sim-area');
+const simPlaceholder = document.getElementById('sim-placeholder');
+const simHeader      = document.getElementById('sim-header');
+const soldOutBanner  = document.getElementById('sold-out-banner');
+const undoBtn        = document.getElementById('undo-btn');
+const csvBtn         = document.getElementById('csv-btn');
+
+// ══════════════════════════════════════════
+//  タイプ行・バー行の動的生成（a〜x の24行）
+// ══════════════════════════════════════════
+function buildRows() {
+  const rowsHost = document.getElementById('type-rows');
+  const barsHost = document.getElementById('sim-bars');
+
+  ALL_TYPES.forEach((t, i) => {
+    const color = TYPE_COLORS[t];
+    const ratio = i < DEFAULT_RATIOS.length ? DEFAULT_RATIOS[i] : 5;
+    const label = t.toUpperCase();
+
+    // 左パネル：タイプ行
+    const row = document.createElement('div');
+    row.id = `row-${t}`;
+    row.className = 'type-row hidden';
+    row.innerHTML = `
+      <label class="dot-upload" id="thumb-${t}" for="img-${t}"
+             title="クリックで画像を割り当て" style="background-color:${color}"></label>
+      <input type="file" id="img-${t}" accept="image/*" class="img-file-input">
+      <input class="name-inp" id="name-${t}" value="${label}" maxlength="12">
+      <input class="num-inp"  id="ratio-${t}" type="number" min="0" max="999" value="${ratio}">
+      <input class="num-inp"  id="drawn-${t}" type="number" min="0" max="999" value="0">
+      <span  class="remain-val" id="rem-${t}" style="color:${color}">${ratio}</span>`;
+    rowsHost.appendChild(row);
+
+    row.querySelector(`#img-${t}`).addEventListener('change', function () { onImageSelect(t, this); });
+    row.querySelector(`#name-${t}`).addEventListener('input', () => onNameChange(t));
+    row.querySelector(`#ratio-${t}`).addEventListener('input', recalc);
+    row.querySelector(`#drawn-${t}`).addEventListener('input', recalc);
+
+    // 右パネル：残り数バー行
+    const brow = document.createElement('div');
+    brow.id = `brow-${t}`;
+    brow.className = 'sim-bar-row hidden';
+    brow.innerHTML = `
+      <span class="sim-bar-label" id="blbl-${t}" style="color:${color}">${label}</span>
+      <div class="sim-bar-wrap"><div class="sim-bar-fill" id="bar-${t}"
+           style="width:100%; background:${color}"></div></div>
+      <span class="sim-bar-count" id="cnt-${t}">-</span>`;
+    barsHost.appendChild(brow);
+  });
+}
+
+// ══════════════════════════════════════════
+//  アソート設定の自動保存・復元（localStorage）
+// ══════════════════════════════════════════
+function saveSettings() {
+  const data = { typeCount: activeTypes.length, types: {} };
+  ALL_TYPES.forEach(t => {
+    data.types[t] = {
+      name:  document.getElementById(`name-${t}`).value,
+      ratio: document.getElementById(`ratio-${t}`).value,
+      drawn: document.getElementById(`drawn-${t}`).value
+    };
+  });
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(data)); } catch (e) {}
+}
+
+function loadSettings() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) { return; }
+  if (!data || !data.types) return;
+
+  ALL_TYPES.forEach(t => {
+    const s = data.types[t];
+    if (!s) return;
+    document.getElementById(`name-${t}`).value  = s.name;
+    document.getElementById(`ratio-${t}`).value = s.ratio;
+    document.getElementById(`drawn-${t}`).value = s.drawn;
+    typeNames[t] = (s.name || '').trim() || t.toUpperCase();
+    document.getElementById(`blbl-${t}`).textContent = typeNames[t];
+  });
+  if (data.typeCount >= 1 && data.typeCount <= MAX_TYPES) {
+    document.getElementById('type-count').value = data.typeCount;
+  }
+}
+
+// ══════════════════════════════════════════
+//  カスタム画像（自動縮小して localStorage に保存）
+// ══════════════════════════════════════════
+
+// 長辺 maxSide px を超える画像を縮小したデータURLを返す（PNGは透過維持、他はJPEG化）
+function resizeImageDataUrl(dataUrl, maxSide, mime, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (Math.max(w, h) <= maxSide) { cb(dataUrl); return; } // 小さい画像はそのまま
+    const r  = maxSide / Math.max(w, h);
+    const cw = Math.round(w * r), ch = Math.round(h * r);
+    const cv = document.createElement('canvas');
+    cv.width = cw; cv.height = ch;
+    const c = cv.getContext('2d');
+    const isPng = mime === 'image/png';
+    if (!isPng) { c.fillStyle = '#fff'; c.fillRect(0, 0, cw, ch); }
+    c.drawImage(img, 0, 0, cw, ch);
+    cb(isPng ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.85));
+  };
+  img.onerror = () => cb(dataUrl);
+  img.src = dataUrl;
+}
+
+function loadCustomImages() {
+  ALL_TYPES.forEach(t => {
+    const data = localStorage.getItem(CUSTOM_IMG_PREFIX + t);
+    if (data) {
+      customImages[t] = data;
+      updateThumb(t);
+    }
+  });
+}
+
+function updateThumb(t) {
+  const el = document.getElementById(`thumb-${t}`);
+  if (!el) return;
+  if (customImages[t]) {
+    el.style.backgroundImage = `url(${customImages[t]})`;
+    el.classList.add('has-img');
+  } else {
+    el.style.backgroundImage = '';
+    el.classList.remove('has-img');
+  }
+}
+
+function onImageSelect(t, inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    resizeImageDataUrl(e.target.result, IMG_MAX_SIDE, file.type, (dataUrl) => {
+      try {
+        localStorage.setItem(CUSTOM_IMG_PREFIX + t, dataUrl);
+      } catch (err) {
+        alert('画像の保存に失敗しました（ブラウザの保存領域が満杯の可能性があります。不要な画像を解除してください）。');
+        return;
+      }
+      customImages[t] = dataUrl;
+      updateThumb(t);
+    });
+  };
+  reader.readAsDataURL(file);
+  inputEl.value = ''; // 同じファイルを選び直しても onchange が発火するように
+}
+
+function clearImage(t) {
+  localStorage.removeItem(CUSTOM_IMG_PREFIX + t);
+  delete customImages[t];
+  updateThumb(t);
+}
+
+function clearAllImages() {
+  if (!confirm('割り当てた画像をすべて解除しますか？')) return;
+  ALL_TYPES.forEach(t => clearImage(t));
+}
+
+// 表示に使う画像URL（カスタム画像があればそれを優先、なければデフォルト画像）
+function getImageSrc(t) {
+  return customImages[t] || `images/${t}.png`;
+}
+
+// ── 表紙画像（初期表示）──
+function loadCoverImage() {
+  const data = localStorage.getItem(COVER_IMG_KEY);
+  if (data) {
+    coverImage = data;
+    updateCoverThumb();
+  }
+}
+
+function updateCoverThumb() {
+  const el = document.getElementById('cover-thumb');
+  if (!el) return;
+  if (coverImage) {
+    el.style.backgroundImage = `url(${coverImage})`;
+    el.classList.add('has-img');
+  } else {
+    el.style.backgroundImage = '';
+    el.classList.remove('has-img');
+  }
+}
+
+function onCoverImageSelect(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    resizeImageDataUrl(e.target.result, COVER_MAX_SIDE, file.type, (dataUrl) => {
+      try {
+        localStorage.setItem(COVER_IMG_KEY, dataUrl);
+      } catch (err) {
+        alert('画像の保存に失敗しました（ブラウザの保存領域が満杯の可能性があります。不要な画像を解除してください）。');
+        return;
+      }
+      coverImage = dataUrl;
+      updateCoverThumb();
+      // ガチャ未実行ならその場で初期表示を更新
+      if (simArea.style.display !== 'none' && simCount === 0) drawPlaceholder();
+    });
+  };
+  reader.readAsDataURL(file);
+  inputEl.value = '';
+}
+
+function clearCoverImage() {
+  localStorage.removeItem(COVER_IMG_KEY);
+  coverImage = null;
+  updateCoverThumb();
+  if (simArea.style.display !== 'none' && simCount === 0) drawPlaceholder();
+}
+
+// ══════════════════════════════════════════
+//  種類数切り替え（1〜24 の数値入力）
+// ══════════════════════════════════════════
+function onTypeCountChange() {
+  const inp = document.getElementById('type-count');
+  let n = parseInt(inp.value);
+  if (isNaN(n)) return; // 入力途中（空欄など）は何もしない
+  n = Math.min(MAX_TYPES, Math.max(1, n));
+  if (String(n) !== inp.value.trim()) inp.value = n;
+  activeTypes = ALL_TYPES.slice(0, n);
+  ALL_TYPES.forEach(t => {
+    document.getElementById(`row-${t}`).classList.toggle('hidden', !activeTypes.includes(t));
+  });
+  recalc();
+}
+
+// ══════════════════════════════════════════
+//  リアルタイム残り計算
+// ══════════════════════════════════════════
+function recalc() {
+  let ti = 0, td = 0, tr = 0;
+  ALL_TYPES.forEach(t => {
+    if (!activeTypes.includes(t)) return;
+    const ratio  = Math.max(0, parseInt(document.getElementById(`ratio-${t}`).value) || 0);
+    const drawn  = Math.max(0, parseInt(document.getElementById(`drawn-${t}`).value) || 0);
+    const remain = Math.max(0, ratio - drawn);
+    document.getElementById(`rem-${t}`).textContent = remain;
+    ti += ratio; td += drawn; tr += remain;
+  });
+  document.getElementById('total-init').textContent  = ti;
+  document.getElementById('total-drawn').textContent = td;
+  document.getElementById('total-rem').textContent   = tr;
+  saveSettings();
+}
+
+function onNameChange(t) {
+  typeNames[t] = document.getElementById(`name-${t}`).value.trim() || t.toUpperCase();
+  document.getElementById(`blbl-${t}`).textContent = typeNames[t];
+  saveSettings();
+}
+
+// ══════════════════════════════════════════
+//  シミュレーター
+// ══════════════════════════════════════════
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent   = msg;
+  el.style.display = 'block';
+}
+
+function startSimulation() {
+  document.getElementById('error-box').style.display = 'none';
+
+  // バリデーション
+  for (const t of activeTypes) {
+    const ratio = parseInt(document.getElementById(`ratio-${t}`).value) || 0;
+    const drawn = parseInt(document.getElementById(`drawn-${t}`).value) || 0;
+    if (drawn > ratio) {
+      showError(`「${typeNames[t]}」の排出済みが初期数を超えています。`);
+      return;
+    }
+  }
+
+  // プール生成
+  simPool      = [];
+  simInitial   = {};
+  simRemaining = {};
+  simCount     = 0;
+  drawnHistory = [];
+
+  activeTypes.forEach(t => {
+    typeNames[t] = document.getElementById(`name-${t}`).value.trim() || t.toUpperCase();
+    const ratio  = parseInt(document.getElementById(`ratio-${t}`).value) || 0;
+    const drawn  = parseInt(document.getElementById(`drawn-${t}`).value) || 0;
+    const remain = Math.max(0, ratio - drawn);
+    simInitial[t]   = remain;
+    simRemaining[t] = remain;
+    for (let i = 0; i < remain; i++) simPool.push({ type: t });
+  });
+
+  if (simPool.length === 0) {
+    showError('残りのアイテムがありません。初期数または排出済みを確認してください。');
+    return;
+  }
+
+  shuffle(simPool);
+
+  // バー表示切替
+  ALL_TYPES.forEach(t => {
+    const row = document.getElementById(`brow-${t}`);
+    row.classList.toggle('hidden', !activeTypes.includes(t));
+    if (activeTypes.includes(t))
+      document.getElementById(`blbl-${t}`).textContent = typeNames[t];
+  });
+
+  // UI リセット
+  drawPlaceholder();
+  resultLabel.textContent     = '';
+  historyGrid.innerHTML       = '';
+  soldOutBanner.style.display = 'none';
+  gachaBtn.classList.remove('sold-out');
+  document.getElementById('history-count').textContent = '';
+  undoBtn.disabled = true;
+  csvBtn.disabled  = true;
+
+  // ヘッダー（名前はユーザー入力なので textContent で安全に挿入）
+  const info = activeTypes.map(t => `${typeNames[t]}:${simInitial[t]}`).join(' / ');
+  simHeader.textContent = '';
+  simHeader.append('シミュレート中', document.createElement('br'));
+  const infoSpan = document.createElement('span');
+  infoSpan.style.cssText = 'font-size:.8rem;color:#555';
+  infoSpan.textContent = info;
+  simHeader.appendChild(infoSpan);
+
+  simPlaceholder.style.display = 'none';
+  simArea.style.display        = 'flex';
+
+  updateBars();
+}
+
+// ── 画像をキャンバスに80%サイズ・原寸比率を維持して中央描画 ──
+function drawImageScaled(img, scale = 0.8) {
+  const maxW = canvas.width  * scale;
+  const maxH = canvas.height * scale;
+  const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+  const w = img.naturalWidth  * ratio;
+  const h = img.naturalHeight * ratio;
+  const x = (canvas.width  - w) / 2;
+  const y = (canvas.height - h) / 2;
+  ctx.drawImage(img, x, y, w, h);
+}
+
+function drawPlaceholder() {
+  if (coverImage) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, 280, 280);
+      drawImageScaled(img);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, 248, 280, 32);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ガチャボタンを押してください', 140, 269);
+      ctx.textAlign = 'left';
+    };
+    img.onerror = drawPlaceholderDefault;
+    img.src = coverImage;
+    return;
+  }
+  drawPlaceholderDefault();
+}
+
+function drawPlaceholderDefault() {
+  ctx.clearRect(0, 0, 280, 280);
+  ctx.fillStyle = '#eeeeee';
+  ctx.fillRect(0, 0, 280, 280);
+  ctx.fillStyle = '#888';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('ガチャボタンを押してください', 140, 150);
+  ctx.textAlign = 'left';
+}
+
+function drawTypeImage(type, count) {
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, 280, 280);
+    drawImageScaled(img);
+    overlayCount(count);
+  };
+  img.onerror = () => {
+    // カラープレースホルダー
+    ctx.clearRect(0, 0, 280, 280);
+    ctx.fillStyle = TYPE_COLORS[type];
+    ctx.fillRect(0, 0, 280, 280);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.font = 'bold 90px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(type.toUpperCase(), 140, 185);
+    ctx.textAlign = 'left';
+    overlayCount(count);
+  };
+  img.src = getImageSrc(type);
+}
+
+function overlayCount(count) {
+  const n = String(count);
+  ctx.font        = 'bold 32px Arial';
+  ctx.lineWidth   = 4;
+  ctx.strokeStyle = 'white';
+  ctx.fillStyle   = 'black';
+  ctx.strokeText(n, 8, 40);
+  ctx.fillText(n, 8, 40);
+}
+
+// バー表示（残り数と「次の1回で出る確率」）
+function updateBars() {
+  const total = simPool.length;
+  activeTypes.forEach(t => {
+    const rem  = simRemaining[t];
+    const init = simInitial[t];
+    const pct  = init > 0 ? (rem / init) * 100 : 0;
+    const prob = total > 0 ? ((rem / total) * 100).toFixed(1) : '0.0';
+    document.getElementById(`bar-${t}`).style.width = pct + '%';
+    document.getElementById(`cnt-${t}`).textContent = `残り ${rem}/${init}｜${prob}%`;
+  });
+}
+
+function refreshCountLabel() {
+  document.getElementById('history-count').textContent =
+    simCount > 0 ? `(${simCount}回)` : '';
+  undoBtn.disabled = drawnHistory.length === 0;
+  csvBtn.disabled  = drawnHistory.length === 0;
+}
+
+// ── 1回引く（共通処理）。引けなければ null ──
+function drawOne() {
+  if (simPool.length === 0) return null;
+
+  const idx  = Math.floor(Math.random() * simPool.length);
+  const item = simPool.splice(idx, 1)[0];
+  simCount++;
+  simRemaining[item.type]--;
+  drawnHistory.push({ type: item.type, count: simCount });
+  addHistory(item, simCount);
+  return item;
+}
+
+function afterDraw(lastItem) {
+  drawTypeImage(lastItem.type, lastItem.count ?? simCount);
+  updateBars();
+  refreshCountLabel();
+
+  gachaBtn.classList.remove('spinning');
+  void gachaBtn.offsetWidth;
+  gachaBtn.classList.add('spinning');
+
+  if (simPool.length === 0) {
+    soldOutBanner.style.display = 'block';
+    gachaBtn.classList.add('sold-out');
+  }
+}
+
+// ガチャ実行（1回）
+gachaBtn.addEventListener('click', () => {
+  const item = drawOne();
+  if (!item) return;
+  resultLabel.textContent =
+    `${simCount}回目: ${typeNames[item.type]}（タイプ ${item.type.toUpperCase()}）`;
+  afterDraw(item);
+});
+
+// 10連ガチャ（残りが10未満なら引けるだけ引く）
+function drawMulti(n) {
+  if (simPool.length === 0) return;
+  const from = simCount + 1;
+  let last = null;
+  for (let i = 0; i < n; i++) {
+    const item = drawOne();
+    if (!item) break;
+    last = item;
+  }
+  resultLabel.textContent =
+    `${from}〜${simCount}回目: ${simCount - from + 1}個排出（最後は ${typeNames[last.type]}）`;
+  afterDraw(last);
+}
+
+// 1回戻す（アンドゥ）
+function undoDraw() {
+  if (drawnHistory.length === 0) return;
+
+  const rec = drawnHistory.pop();
+  simPool.push({ type: rec.type }); // プールに戻す（抽選は毎回ランダム位置なので順序は不問）
+  simRemaining[rec.type]++;
+  simCount--;
+
+  // 履歴グリッドの最後のコマを削除
+  if (historyGrid.lastElementChild) historyGrid.lastElementChild.remove();
+
+  // 売り切れ解除
+  soldOutBanner.style.display = 'none';
+  gachaBtn.classList.remove('sold-out');
+
+  // キャンバスと結果表示を1つ前の状態に
+  const prev = drawnHistory[drawnHistory.length - 1];
+  if (prev) {
+    drawTypeImage(prev.type, prev.count);
+    resultLabel.textContent =
+      `${prev.count}回目: ${typeNames[prev.type]}（タイプ ${prev.type.toUpperCase()}）`;
+  } else {
+    drawPlaceholder();
+    resultLabel.textContent = '';
+  }
+
+  updateBars();
+  refreshCountLabel();
+}
+
+// ── 履歴のCSV保存 ──
+function downloadCSV() {
+  if (drawnHistory.length === 0) return;
+
+  const lines = ['回数,タイプ,名前'];
+  drawnHistory.forEach(rec => {
+    const name = (typeNames[rec.type] || '').replace(/"/g, '""');
+    lines.push(`${rec.count},${rec.type.toUpperCase()},"${name}"`);
+  });
+
+  // BOM付きUTF-8（Excelで文字化けしないように）
+  const blob = new Blob(["﻿" + lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  a.href = URL.createObjectURL(blob);
+  a.download = `gacha_history_${stamp}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+gachaBtn.addEventListener('animationend', () => gachaBtn.classList.remove('spinning'));
+
+// ── 履歴アイコンの拡大表示 ──
+function openImageModal(src) {
+  document.getElementById('img-modal-img').src = src;
+  document.getElementById('img-modal').classList.add('show');
+}
+
+function closeImageModal() {
+  document.getElementById('img-modal').classList.remove('show');
+}
+
+function addHistory(item, count) {
+  const div = document.createElement('div');
+  div.className = 'history-item';
+  div.title = '画像をクリックで拡大';
+  div.onclick = () => openImageModal(getImageSrc(item.type));
+
+  const img = document.createElement('img');
+  img.alt = item.type.toUpperCase();
+  img.onerror = function () {
+    this.style.display = 'none';
+    const fb = document.createElement('div');
+    fb.className = 'h-fallback';
+    fb.style.background = TYPE_COLORS[item.type];
+    fb.textContent = item.type.toUpperCase();
+    div.appendChild(fb);
+  };
+  img.src = getImageSrc(item.type);
+
+  const num = document.createElement('span');
+  num.className   = 'h-num';
+  num.textContent = count;
+
+  const badge = document.createElement('span');
+  badge.className = 'h-badge';
+  badge.style.background = TYPE_COLORS[item.type];
+  const name = typeNames[item.type];
+  badge.textContent = name.length <= 4 ? name : name.slice(0, 3) + '…';
+
+  div.appendChild(img);
+  div.appendChild(num);
+  div.appendChild(badge);
+  historyGrid.appendChild(div);
+}
+
+// 初期化
+window.onload = () => {
+  buildRows();
+  loadSettings();      // 前回の設定（種類数・名前・個数）を復元
+  onTypeCountChange(); // 種類数ぶんの行を表示して残りを計算
+  loadCustomImages();
+  loadCoverImage();
+};
+</script>
+</body>
+</html>

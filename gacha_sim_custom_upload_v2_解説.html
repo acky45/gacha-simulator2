@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解説：ガチャ カスタムアソート シミュレータ v2</title>
+<style>
+  :root {
+    --primary: #2c3e50; --accent: #e74c3c; --green: #27ae60;
+    --bg: #f8f9fa; --card: #fff; --border: #e2e8f0; --code-bg: #f1f5f9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; }
+  body { background: var(--bg); color: #333; line-height: 1.8; }
+
+  header { background: var(--primary); color: #fff; padding: 26px 24px; text-align: center; }
+  header h1 { font-size: 1.25rem; margin-bottom: 6px; }
+  header p  { font-size: 0.85rem; opacity: 0.85; }
+
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
+
+  section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 22px 26px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  }
+  h2 {
+    font-size: 1.05rem; color: var(--primary);
+    border-left: 5px solid var(--primary); padding-left: 10px; margin-bottom: 14px;
+  }
+  h3 { font-size: 0.95rem; color: var(--primary); margin: 18px 0 8px; }
+  p, li { font-size: 0.9rem; }
+  ul, ol { padding-left: 1.5em; margin-bottom: 8px; }
+  li { margin-bottom: 3px; }
+
+  code {
+    background: var(--code-bg); padding: 1px 6px; border-radius: 3px;
+    font-family: Consolas, Monaco, monospace; font-size: 0.83em; color: #c0392b;
+  }
+  .note {
+    background: #fff8e1; border-left: 4px solid #f0a500;
+    padding: 10px 14px; border-radius: 4px; font-size: 0.85rem; margin: 10px 0;
+  }
+  .point {
+    background: #e8f6ef; border-left: 4px solid var(--green);
+    padding: 10px 14px; border-radius: 4px; font-size: 0.85rem; margin: 10px 0;
+  }
+  .new-tag {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 0.68rem; font-weight: bold; padding: 1px 7px; border-radius: 8px;
+    vertical-align: middle; margin-right: 5px;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85rem; }
+  th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); color: var(--primary); white-space: nowrap; }
+  td:first-child { white-space: nowrap; }
+  .table-scroll { overflow-x: auto; }
+
+  /* 処理フロー図 */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 14px 0; }
+  .flow-box {
+    background: var(--code-bg); border: 1.5px solid var(--primary); border-radius: 6px;
+    padding: 8px 20px; font-size: 0.85rem; text-align: center; min-width: 320px; max-width: 100%;
+  }
+  .flow-box b { color: var(--primary); }
+  .flow-arrow { color: var(--primary); font-size: 1.1rem; line-height: 1.4; }
+
+  /* 画面レイアウト模式図 */
+  .layout-demo {
+    display: flex; gap: 8px; border: 2px solid var(--border); border-radius: 6px;
+    padding: 8px; margin: 12px 0; background: #fdfdfd;
+  }
+  .layout-demo .lp {
+    width: 38%; background: #eef3f8; border: 1px dashed #9ab; border-radius: 4px;
+    padding: 10px; font-size: 0.78rem; line-height: 1.7;
+  }
+  .layout-demo .rp {
+    flex: 1; background: #f2f8f2; border: 1px dashed #8b8; border-radius: 4px;
+    padding: 10px; font-size: 0.78rem; line-height: 1.7;
+  }
+  .layout-demo b { display: block; margin-bottom: 4px; font-size: 0.82rem; }
+
+  footer { text-align: center; font-size: 0.75rem; color: #999; padding: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ガチャ カスタムアソート シミュレータ v2 解説</h1>
+  <p>対象ファイル：gacha_sim_custom_upload_v2.html ｜ HTML / CSS / JavaScript のみで動作する単一ファイルアプリ</p>
+</header>
+
+<div class="wrap">
+
+<!-- ═══════════ 概要 ═══════════ -->
+<section>
+  <h2>1. このアプリは何をするもの？</h2>
+  <p>
+    自分のPCにある画像（サムネイル）をアップロードして、ガチャガチャの<strong>アソート（中身の内訳）</strong>を再現し、
+    「実際に回したらどの順番で何が出るか」を疑似体験できるシミュレータです。
+  </p>
+  <ul>
+    <li>景品の種類数（1〜24種）と、それぞれの<strong>初期数・排出済み数</strong>を自由に設定できる</li>
+    <li>各タイプに自分の画像を割り当てられる（例：実際の商品のサムネイル写真）</li>
+    <li>ガチャボタンを押すたびに、<strong>残っている中からランダムに1個</strong>が出る（＝現実のガチャと同じ「引いたら減る」方式）</li>
+    <li>残り数のバーグラフ・次に出る確率・引いた順の履歴がリアルタイムに更新される</li>
+  </ul>
+
+  <h3>v2 で追加された機能</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>機能</th><th>内容</th></tr>
+    <tr><td><span class="new-tag">NEW</span>設定の自動保存</td><td>種類数・名前・初期数・排出済が入力のたびに自動保存され、次回開いたとき復元される</td></tr>
+    <tr><td><span class="new-tag">NEW</span>画像の自動縮小</td><td>アップロード画像を長辺360px（表紙は600px）に自動縮小してから保存。大きい写真でも容量エラーになりにくい</td></tr>
+    <tr><td><span class="new-tag">NEW</span>10連ガチャ</td><td>1クリックで10回分まとめて引く（残りが10未満なら引けるだけ）</td></tr>
+    <tr><td><span class="new-tag">NEW</span>1回戻す</td><td>直前の1回を取り消してプールに戻す（履歴・バー・売り切れ表示も巻き戻る）</td></tr>
+    <tr><td><span class="new-tag">NEW</span>CSV保存</td><td>引いた履歴（回数・タイプ・名前）をExcelで開けるCSVでダウンロード</td></tr>
+    <tr><td><span class="new-tag">NEW</span>確率表示</td><td>各タイプの「次の1回で出る確率」をバーの横に%表示</td></tr>
+  </table>
+  </div>
+
+  <div class="point">
+    <strong>ポイント：完全ローカル動作。</strong>
+    サーバーへの送信は一切ありません。アップロードした画像・設定はブラウザ内の保存領域（localStorage）に記録されるだけで、
+    PCの外には出ません。ファイルをダブルクリックで開くだけで動きます。
+  </div>
+</section>
+
+<!-- ═══════════ 画面構成 ═══════════ -->
+<section>
+  <h2>2. 画面構成</h2>
+  <p>
+    画面は左右2パネル構成です。<strong>左で設定 → 右でシミュレート</strong>という流れになっています。
+    左右のパネルは<strong>それぞれ独立してスクロール</strong>できるため、種類数が多くても
+    片側の操作でもう片側の表示位置がずれません。
+  </p>
+
+  <div class="layout-demo">
+    <div class="lp">
+      <b>◀ 左パネル：アソート設定</b>
+      ・表紙画像のアップロード<br>
+      ・種類数の数値入力（1〜24種）<br>
+      ・タイプごとの行：<br>
+      　画像アイコン／名前／初期数／排出済／残り<br>
+      ・合計表示（初期・排出済・残り）<br>
+      ・「シミュレート開始 ▶」ボタン
+    </div>
+    <div class="rp">
+      <b>シミュレーション画面 ▶</b>
+      ・結果表示キャンバス（280×280px）＋ガチャボタン<br>
+      ・「10連 ▶」「↩ 1回戻す」ボタン<br>
+      ・タイプ別の残り数バー＋確率%<br>
+      ・引いた履歴グリッド＋「CSV保存」<br>
+      ・全部出たら「【全商品終了】」バナー
+    </div>
+  </div>
+
+  <h3>左パネルの各項目</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>項目</th><th>内容</th></tr>
+    <tr><td>表紙画像</td><td>ガチャを引く前にキャンバスに表示される画像。商品パッケージの写真などを想定。未設定ならグレーの案内表示になる。</td></tr>
+    <tr><td>アソート種類数</td><td>1〜24の数値を入力。入力した数だけタイプ行（A〜X）が表示され、非表示のタイプは計算にも抽選にも含まれない。範囲外の値は自動で1〜24に補正される。</td></tr>
+    <tr><td>画像アイコン（●）</td><td>クリックするとファイル選択が開き、そのタイプのサムネイル画像を割り当てられる。割り当て済みはアイコンに画像が表示される。</td></tr>
+    <tr><td>名前</td><td>タイプの表示名（最大12文字）。バーグラフのラベル・履歴のバッジ・CSVに反映される。</td></tr>
+    <tr><td>初期数</td><td>そのタイプがアソートに入っている個数（0〜999）。</td></tr>
+    <tr><td>排出済</td><td>すでに現実で出てしまった個数。<strong>「初期数 − 排出済 ＝ 残り」</strong>が抽選対象になる。途中からのシミュレートができるのはこの欄のおかげ。</td></tr>
+    <tr><td>残り</td><td>自動計算（入力のたびに即時更新）。手入力はできない。</td></tr>
+  </table>
+  </div>
+</section>
+
+<!-- ═══════════ 抽選の仕組み ═══════════ -->
+<section>
+  <h2>3. 抽選の仕組み（いちばん大事なところ）</h2>
+  <p>
+    このアプリの抽選は「確率○%で当たり」という<strong>確率方式ではなく</strong>、
+    現実のガチャマシンと同じ<strong>「箱の中から取り出す」方式（非復元抽選）</strong>です。
+  </p>
+
+  <div class="flow">
+    <div class="flow-box"><b>① プール生成</b><br>タイプごとに「残り個数」分のカプセルを配列に詰める<br>（例：A残り7個 → Aのカプセルを7個入れる）</div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-box"><b>② シャッフル</b><br>フィッシャー–イェーツ法で配列を偏りなくかき混ぜる</div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-box"><b>③ 抽選</b><br>ボタンを押すたび、配列からランダムな位置の1個を<br><code>splice</code> で「取り除いて」結果にする</div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-box"><b>④ 更新</b><br>残り数・確率%・バーグラフ・履歴に反映。<br>プールが空になったら「全商品終了」</div>
+  </div>
+
+  <div class="point">
+    <strong>取り除く方式なので：</strong>同じ個体は二度と出ない／残りが少ないタイプほど出にくくなる／
+    最後まで引けば必ず設定した内訳どおりの結果になる——という現実のガチャの性質がそのまま再現されます。
+  </div>
+
+  <h3>10連ガチャの動き</h3>
+  <ul>
+    <li>内部的には<strong>1回引く処理を最大10回繰り返しているだけ</strong>。特別な確率補正はない</li>
+    <li>残りが10個未満のときは引けるだけ引く（例：残り4個なら4連で終了）</li>
+    <li>キャンバスには最後に出た1個を表示し、履歴には10個すべてが順番に追加される</li>
+  </ul>
+
+  <h3>「1回戻す」（アンドゥ）の動き</h3>
+  <ul>
+    <li>直前に引いた1個を<strong>プールに戻し</strong>、残り数・カウント・履歴の最後のコマを巻き戻す</li>
+    <li>売り切れ後でも戻せる（「全商品終了」バナーも消えてガチャ再開できる）</li>
+    <li>連打すれば何回でも遡れる（履歴が空になるまで）。戻した後に引き直せば、当然結果は変わる</li>
+    <li>次に出る確率は「残り÷全体」で計算しているので、戻した瞬間に確率表示も正しく戻る</li>
+  </ul>
+
+  <h3>次に出る確率の表示</h3>
+  <p>
+    各バーの右側の「残り 3/7｜15.0%」は、<strong>左が残り数／シミュレート開始時の数、右が次の1回でそのタイプが出る確率</strong>です。
+    確率は「そのタイプの残り数 ÷ 全タイプの残り合計」で毎回計算し直しています。
+  </p>
+
+  <h3>入力チェック（バリデーション）</h3>
+  <ul>
+    <li>排出済みが初期数を超えているタイプがあると、エラー表示して開始しない</li>
+    <li>全タイプの残りが0（引ける物がない）の場合もエラー表示して開始しない</li>
+  </ul>
+</section>
+
+<!-- ═══════════ 画像の扱い ═══════════ -->
+<section>
+  <h2>4. 画像アップロードと自動縮小の仕様</h2>
+
+  <h3>アップロードの流れ</h3>
+  <ol>
+    <li>アイコンをクリック → ファイル選択ダイアログで画像を選ぶ</li>
+    <li><code>FileReader</code> が画像をデータURL（Base64文字列）に変換する</li>
+    <li><span class="new-tag">NEW</span><strong>長辺が規定サイズを超える画像は自動縮小</strong>（タイプ画像：360px、表紙：600px）。
+        PNGは透過を維持したままPNGで、それ以外はJPEG（品質85%）で再圧縮する</li>
+    <li>縮小後のデータを <strong>localStorage</strong>（ブラウザ内の保存領域）に書き込む</li>
+    <li>アイコンのサムネイル表示を更新する</li>
+  </ol>
+  <p>
+    スマホで撮った数MBの写真でも保存時は数十KB程度になるため、
+    24種すべてに写真を割り当てても localStorage の容量（約5MB）に収まります。
+  </p>
+
+  <h3>画像の優先順位（3段フォールバック）</h3>
+  <ol>
+    <li><strong>アップロードしたカスタム画像</strong>（あれば最優先）</li>
+    <li>なければ同フォルダの <code>images/a.png</code> 〜（デフォルト画像）</li>
+    <li>それも読めなければ<strong>タイプ色のカラーパネル＋英字</strong>（例：茶色地に大きく「A」）</li>
+  </ol>
+  <p>つまり画像を1枚も用意しなくても、色分け表示で最後まで動作します。</p>
+</section>
+
+<!-- ═══════════ データ保存 ═══════════ -->
+<section>
+  <h2>5. データ保存の仕様（localStorage）</h2>
+  <p>保存されるのは次の3種類。すべて<strong>閲覧者自身のブラウザの中だけ</strong>に保存されます。</p>
+
+  <div class="table-scroll">
+  <table>
+    <tr><th>キー</th><th>保存内容</th></tr>
+    <tr><td><code>gachaCustomImg_a</code> 〜 <code>gachaCustomImg_x</code></td><td>タイプA〜Xに割り当てた画像（縮小済みデータURL）。旧版と共通キーなので旧版の画像も引き継がれる</td></tr>
+    <tr><td><code>gachaCoverImg</code></td><td>表紙画像（縮小済みデータURL）</td></tr>
+    <tr><td><code>gachaAssortSettings</code></td><td><span class="new-tag">NEW</span>アソート設定一式（種類数と、全タイプの名前・初期数・排出済）のJSON</td></tr>
+  </table>
+  </div>
+
+  <ul>
+    <li>設定は<strong>入力のたびに自動保存</strong>。保存ボタンはない</li>
+    <li>ページを開くと <code>loadSettings()</code> が前回の設定を復元し、続けて画像も復元される</li>
+    <li>引いた履歴（何回目に何が出たか）は保存<strong>されない</strong>。「シミュレート開始」のたびに白紙から始まる。記録を残したいときはCSV保存を使う</li>
+  </ul>
+
+  <div class="note">
+    <strong>注意：</strong>保存先はブラウザ単位です。別のブラウザ・別のPC・シークレットモードでは設定も画像も引き継がれません。
+    またブラウザの「閲覧データの削除」でサイトデータを消すと、保存内容も消えます。
+  </div>
+</section>
+
+<!-- ═══════════ 利用上の注意 ═══════════ -->
+<section>
+  <h2>6. 利用上の注意（自分のPCで楽しむアプリです）</h2>
+  <div class="note">
+    <strong>商品サムネイルなどの画像には著作権があります。</strong>
+    このアプリはWebへの公開はせず、<strong>自分のPCにダウンロードして、個人で楽しむ範囲</strong>でご利用ください。
+  </div>
+
+  <h3>プライバシーについて（安心して使える点）</h3>
+  <ul>
+    <li><strong>アップロードした画像はどこにも送信されない</strong> — 画像や設定は自分のブラウザの localStorage に保存されるだけで、PCの外には出ない</li>
+    <li><strong>外部への通信が一切ない</strong> — 外部CDN・解析ツール・APIを使っていないため、勝手にどこかへアクセスすることがない</li>
+    <li><strong>ネット接続不要</strong> — ファイルをダブルクリックで開くだけで、オフラインでも動作する</li>
+  </ul>
+</section>
+
+<!-- ═══════════ 主要関数リファレンス ═══════════ -->
+<section>
+  <h2>7. コード内の主要関数リファレンス</h2>
+  <p>ソースを読むとき・改造するときの手がかりです。処理のまとまりごとに整理しています。</p>
+
+  <div class="table-scroll">
+  <table>
+    <tr><th>関数</th><th>役割</th></tr>
+    <tr><td colspan="2" style="background:#eef3f8; font-weight:bold;">初期化・設定パネル関連</td></tr>
+    <tr><td><code>buildRows()</code></td><td>起動時に24タイプ分の設定行とバー行をまとめて動的生成し、入力イベントを紐付ける。</td></tr>
+    <tr><td><code>saveSettings()</code> / <code>loadSettings()</code></td><td><span class="new-tag">NEW</span>アソート設定の自動保存と、起動時の復元。</td></tr>
+    <tr><td><code>onTypeCountChange()</code></td><td>種類数入力(1〜24に自動補正)に応じて、先頭からn個のタイプ行だけを表示し、再計算する。</td></tr>
+    <tr><td><code>recalc()</code></td><td>入力のたびに「残り」と合計3項目を即時更新し、設定を自動保存する。</td></tr>
+    <tr><td><code>onNameChange(t)</code></td><td>名前入力をタイプ名に反映（空ならA〜Xに戻す）。バーのラベルも同期し、自動保存する。</td></tr>
+    <tr><td colspan="2" style="background:#eef3f8; font-weight:bold;">画像管理関連</td></tr>
+    <tr><td><code>resizeImageDataUrl(...)</code></td><td><span class="new-tag">NEW</span>長辺が規定pxを超える画像を縮小。PNGは透過維持、他はJPEG(85%)で再圧縮。</td></tr>
+    <tr><td><code>onImageSelect(t, input)</code> / <code>onCoverImageSelect(input)</code></td><td>選択画像をデータURL化 → 自動縮小 → localStorage 保存 → サムネイル更新。</td></tr>
+    <tr><td><code>clearImage(t)</code> / <code>clearAllImages()</code> / <code>clearCoverImage()</code></td><td>割り当て画像の解除（localStorage からの削除）。全解除は確認ダイアログ付き。</td></tr>
+    <tr><td><code>getImageSrc(t)</code></td><td>「カスタム画像 → デフォルト画像」の優先順位で表示用の画像URLを返す。</td></tr>
+    <tr><td colspan="2" style="background:#eef3f8; font-weight:bold;">シミュレーション本体</td></tr>
+    <tr><td><code>startSimulation()</code></td><td>入力チェック → 残り数分のプール生成 → シャッフル → 右パネルのUIを初期化して開始。</td></tr>
+    <tr><td><code>shuffle(arr)</code></td><td>フィッシャー–イェーツ法による偏りのないシャッフル。</td></tr>
+    <tr><td><code>drawOne()</code></td><td><span class="new-tag">NEW</span>「1回引く」の共通処理。プールから1個取り除き、履歴に記録する。単発・10連の両方から呼ばれる。</td></tr>
+    <tr><td><code>drawMulti(n)</code></td><td><span class="new-tag">NEW</span>10連ガチャ。<code>drawOne()</code> を最大n回繰り返す。</td></tr>
+    <tr><td><code>undoDraw()</code></td><td><span class="new-tag">NEW</span>直前の1回を取り消し。プールに戻して残り数・履歴・売り切れ表示を巻き戻す。</td></tr>
+    <tr><td><code>downloadCSV()</code></td><td><span class="new-tag">NEW</span>履歴をBOM付きUTF-8のCSVでダウンロード（Excel対応、ファイル名に日時入り）。</td></tr>
+    <tr><td colspan="2" style="background:#eef3f8; font-weight:bold;">描画・履歴関連</td></tr>
+    <tr><td><code>drawImageScaled(img)</code></td><td>縦横比を保って80%サイズで中央描画する共通処理。</td></tr>
+    <tr><td><code>drawPlaceholder()</code> / <code>drawPlaceholderDefault()</code></td><td>ガチャ前の初期表示。表紙画像があれば表紙＋案内帯、なければグレー画面。</td></tr>
+    <tr><td><code>drawTypeImage(type, count)</code></td><td>結果画像をキャンバスに描画。読み込み失敗時はカラーパネルに切り替え、回数を重ねる。</td></tr>
+    <tr><td><code>updateBars()</code></td><td>全アクティブタイプのバー幅と「残り n/m｜確率%」表示を更新。</td></tr>
+    <tr><td><code>addHistory(item, count)</code></td><td>履歴グリッドに1コマ追加（画像・回数・タイプバッジ・クリックで拡大）。</td></tr>
+    <tr><td><code>openImageModal(src)</code> / <code>closeImageModal()</code></td><td>履歴サムネイルの拡大モーダルの開閉。</td></tr>
+  </table>
+  </div>
+
+  <h3>主な状態変数</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>変数</th><th>内容</th></tr>
+    <tr><td><code>activeTypes</code></td><td>現在有効なタイプの配列（例：3種なら <code>['a','b','c']</code>）</td></tr>
+    <tr><td><code>simPool</code></td><td>抽選プール。残っているカプセル1個が配列要素1個に対応し、引くたびに減る（アンドゥで戻る）</td></tr>
+    <tr><td><code>simInitial</code> / <code>simRemaining</code></td><td>シミュレート開始時の個数と現在の残り個数（タイプ別）。バーグラフの分母・分子</td></tr>
+    <tr><td><code>simCount</code></td><td>通算で引いた回数</td></tr>
+    <tr><td><code>drawnHistory</code></td><td><span class="new-tag">NEW</span>引いた順の記録。アンドゥとCSV出力の元データ</td></tr>
+    <tr><td><code>customImages</code> / <code>coverImage</code></td><td>アップロード画像のデータURL（localStorage と同期）</td></tr>
+  </table>
+  </div>
+</section>
+
+<!-- ═══════════ 制限事項 ═══════════ -->
+<section>
+  <h2>8. 動作条件・制限事項まとめ</h2>
+  <ul>
+    <li><strong>必要環境：</strong>モダンブラウザのみ（Chrome / Edge / Firefox / Safari）。サーバー・ネット接続・インストール不要</li>
+    <li><strong>同フォルダに置くと表示が良くなるファイル：</strong><code>1000196889_2.png</code>（ガチャボタン画像）、<code>images/a.png〜</code>（デフォルト画像）。なくても代替表示で動作する</li>
+    <li><strong>保存はブラウザ単位：</strong>別ブラウザ・別PC・シークレットモードでは設定も画像も引き継がれない</li>
+    <li><strong>履歴はシミュレートごとにリセット：</strong>記録を残したいときはCSV保存を使う</li>
+    <li><strong>種類数は最大24種：</strong>タイプ識別子はA〜Xの24文字。25種以上には現状対応していない</li>
+  </ul>
+</section>
+
+</div>
+
+<footer>gacha_sim_custom_upload_v2.html 解説ドキュメント</footer>
+
+</body>
+</html>
